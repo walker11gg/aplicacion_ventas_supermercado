@@ -12,7 +12,8 @@ como correr el proyecto:
     4.4. por ultimo  importa los datos de prueba de la misma  manera
     que seria el archivo seed.sql, este se importa igual que el schema.sql
 5.  correr el sistema colocando la  url en el navegador
-    http://localhost/Sistema_de_ventas_web_supermercado/index.php?ruta=auth/login
+    http://localhost/aplicacion_ventas_supermercado/index.php?ruta=auth/login
+    (la URL base se detecta sola, así que funciona con el nombre de carpeta que tengas en htdocs)
 
 IMPORTANTE
 

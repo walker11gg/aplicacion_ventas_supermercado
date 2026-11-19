@@ -1,0 +1,129 @@
+<?php
+/**
+ * Acceso a los datos de las ventas.
+ */
+class Venta
+{
+    /**
+     * Crea una venta abierta con la fecha y hora actuales de la base de datos.
+     */
+    public static function crear(int $idCajero, string $estado = 'Abierta'): int
+    {
+        if ($idCajero <= 0) {
+            throw new InvalidArgumentException('El cajero no es válido.');
+        }
+
+
+        self::validarEstado($estado);
+
+        $consulta = Database::getConexion()->prepare(
+            'INSERT INTO Venta (idUsuario, fecha, impuesto, total, estado)
+             VALUES (:idUsuario, CURRENT_TIMESTAMP, 0.00, 0.00, :estado)'
+        );
+        $consulta->execute([
+            ':idUsuario' => $idCajero,
+            ':estado' => $estado,
+        ]);
+
+        return (int) Database::getConexion()->lastInsertId();
+    }
+
+    /** Devuelve una venta por su identificador, o null si no existe. */
+    public static function obtenerPorId(int $idVenta): ?array
+    {
+        if ($idVenta <= 0) {
+            throw new InvalidArgumentException('El identificador de venta no es válido.');
+        }
+
+        $consulta = Database::getConexion()->prepare(
+            'SELECT idVenta, idUsuario, fecha, impuesto, total, estado
+             FROM Venta
+             WHERE idVenta = :idVenta
+             LIMIT 1'
+        );
+        $consulta->execute([':idVenta' => $idVenta]);
+        $venta = $consulta->fetch();
+
+        return $venta ?: null;
+    }
+
+    /**
+     * Recalcula el total bruto y el impuesto incluido a partir de las líneas.
+     *
+     * @return array{subtotalSinIva: float, impuesto: float, total: float}
+     */
+    public static function recalcularTotales(int $idVenta): array
+    {
+        if ($idVenta <= 0) {
+            throw new InvalidArgumentException('El identificador de venta no es válido.');
+        }
+        if (!defined('IVA_PORCENTAJE') || IVA_PORCENTAJE < 0) {
+            throw new LogicException('La constante IVA_PORCENTAJE no está configurada correctamente.');
+        }
+
+        $pdo = Database::getConexion();
+        $existe = $pdo->prepare('SELECT 1 FROM Venta WHERE idVenta = :idVenta LIMIT 1');
+        $existe->execute([':idVenta' => $idVenta]);
+        if ($existe->fetchColumn() === false) {
+            throw new OutOfBoundsException('La venta indicada no existe.');
+        }
+
+        $consulta = $pdo->prepare(
+            'SELECT COALESCE(SUM(subtotal), 0.00)
+             FROM DetalleVenta
+             WHERE idVenta = :idVenta'
+        );
+        $consulta->execute([':idVenta' => $idVenta]);
+        $subtotalSinIva = round((float) $consulta->fetchColumn(), 2);
+        $impuesto = round($subtotalSinIva * IVA_PORCENTAJE / 100, 2);
+        $total = round($subtotalSinIva + $impuesto, 2);
+
+        $actualizar = $pdo->prepare(
+            'UPDATE Venta
+             SET impuesto = :impuesto, total = :total
+             WHERE idVenta = :idVenta'
+        );
+        $actualizar->execute([
+            ':impuesto' => number_format($impuesto, 2, '.', ''),
+            ':total' => number_format($total, 2, '.', ''),
+            ':idVenta' => $idVenta,
+        ]);
+
+        return [
+            'subtotalSinIva' => $subtotalSinIva,
+            'impuesto' => $impuesto,
+            'total' => $total,
+        ];
+    }
+
+    /** Actualiza el estado usando los valores permitidos por el esquema. */
+    public static function actualizarEstado(int $idVenta, string $estado): void
+    {
+        if ($idVenta <= 0) {
+            throw new InvalidArgumentException('El identificador de venta no es válido.');
+        }
+        self::validarEstado($estado);
+
+        if (self::obtenerPorId($idVenta) === null) {
+            throw new OutOfBoundsException('La venta indicada no existe.');
+        }
+
+        if ($estado === 'Pagada') {
+            // PUNTO DE INTEGRACIÓN: descuento de inventario (Brandon)
+        }
+
+        Database::getConexion()
+            ->prepare('UPDATE Venta SET estado = :estado WHERE idVenta = :idVenta')
+            ->execute([
+                ':estado' => $estado,
+                ':idVenta' => $idVenta,
+            ]);
+    }
+
+    private static function validarEstado(string $estado): void
+    {
+        if (!in_array($estado, ['Abierta', 'Pagada', 'Anulada'], true)) {
+            throw new InvalidArgumentException('El estado de venta no es válido.');
+        }
+    }
+}

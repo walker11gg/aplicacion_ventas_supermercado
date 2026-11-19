@@ -10,7 +10,7 @@ class Usuario
     {
         $sql = 'SELECT idUsuario, nombre, apellido, usuario, `contraseña` AS clave,
                        rol, estado, intentosFallidos, bloqueadoHasta
-                FROM usuario
+                FROM Usuario
                 WHERE usuario = :usuario
                 LIMIT 1';
 
@@ -32,13 +32,13 @@ class Usuario
 
         if ($nuevos >= MAX_INTENTOS_LOGIN) {
             $hasta = date('Y-m-d H:i:s', time() + BLOQUEO_MINUTOS * 60);
-            $pdo->prepare('UPDATE usuario SET intentosFallidos = 0, bloqueadoHasta = :hasta
+            $pdo->prepare('UPDATE Usuario SET intentosFallidos = 0, bloqueadoHasta = :hasta
                            WHERE idUsuario = :id')
                 ->execute([':hasta' => $hasta, ':id' => $idUsuario]);
             return $hasta;
         }
 
-        $pdo->prepare('UPDATE usuario SET intentosFallidos = :n WHERE idUsuario = :id')
+        $pdo->prepare('UPDATE Usuario SET intentosFallidos = :n WHERE idUsuario = :id')
             ->execute([':n' => $nuevos, ':id' => $idUsuario]);
         return null;
     }
@@ -47,7 +47,7 @@ class Usuario
     public static function reiniciarIntentos(int $idUsuario): void
     {
         Database::getConexion()
-            ->prepare('UPDATE usuario SET intentosFallidos = 0, bloqueadoHasta = NULL
+            ->prepare('UPDATE Usuario SET intentosFallidos = 0, bloqueadoHasta = NULL
                        WHERE idUsuario = :id')
             ->execute([':id' => $idUsuario]);
     }
