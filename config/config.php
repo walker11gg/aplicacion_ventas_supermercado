@@ -23,10 +23,9 @@ date_default_timezone_set('America/Bogota');
 // ---------------------------------------------------------------------
 // Rutas
 // ---------------------------------------------------------------------
-define('RUTA_RAIZ', dirname(__DIR__));                       // carpeta del proyecto en disco
-// URL base detectada automáticamente según la carpeta donde esté el proyecto
-// (p. ej. /aplicacion_ventas_supermercado/). Siempre termina en "/".
-define('URL_BASE', rtrim(str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME'] ?? '/index.php')), '/') . '/');
+define('RUTA_RAIZ', dirname(__DIR__));
+$directorioAplicacion = dirname($_SERVER['SCRIPT_NAME'] ?? '/index.php');
+define('URL_BASE', rtrim(str_replace('\\', '/', $directorioAplicacion), '/') . '/');
 
 // ---------------------------------------------------------------------
 // Base de datos (XAMPP por defecto: usuario root y sin contraseña)

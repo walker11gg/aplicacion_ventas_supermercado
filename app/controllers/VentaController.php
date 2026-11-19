@@ -101,7 +101,7 @@ class VentaController
         $error = null;
         $exito = $_SESSION['venta_exito'] ?? null;
         unset($_SESSION['venta_exito']);
-        if ($error === null && isset($_SESSION['venta_error'])) {
+        if (isset($_SESSION['venta_error'])) {
             $error = $_SESSION['venta_error'];
             unset($_SESSION['venta_error']);
         }
@@ -140,7 +140,7 @@ class VentaController
                             }
 
                             if ($accion === 'agregar') {
-                                $cantidad = $cantidad + (int) ($carrito[$idProducto] ?? 0);
+                                $cantidad += (int) ($carrito[$idProducto] ?? 0);
                                 if ($cantidad > (int) $producto['cantidadActual']) {
                                     throw new DomainException('La cantidad solicitada supera las existencias disponibles.');
                                 }
@@ -160,7 +160,7 @@ class VentaController
                             Auth::redirigir('venta/nueva');
 
                         case 'confirmar':
-                            $idVenta = $this->crearVenta($usuario['id'], $carrito);
+                            $idVenta = $this->crearVenta((int) $usuario['id'], $carrito);
                             unset($_SESSION[self::CLAVE_CARRITO]);
                             Auth::redirigir('pago/cobrar&idVenta=' . $idVenta);
 
@@ -221,9 +221,7 @@ class VentaController
                 DetalleVenta::agregarLinea($idVenta, $idProducto, $cantidad, $precio);
             }
 
-            // PUNTO DE INTEGRACIÓN: descuento de inventario (Brandon)
             $pdo->commit();
-
             return $idVenta;
         } catch (Throwable $error) {
             if ($pdo->inTransaction()) {

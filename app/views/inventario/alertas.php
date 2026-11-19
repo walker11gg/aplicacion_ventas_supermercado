@@ -4,6 +4,7 @@ $migas = ['Inventario', 'Alertas'];
 $rutaActiva = 'inventario/alertas';
 require RUTA_RAIZ . '/app/views/layouts/header.php';
 ?>
+
 <h1 class="titulo-1">Alertas de stock</h1>
 <?php if ($productos === []): ?>
     <div class="alerta alerta--exito" role="status">No hay productos activos con stock crítico.</div>
@@ -35,4 +36,5 @@ require RUTA_RAIZ . '/app/views/layouts/header.php';
         <?php endforeach; ?>
     </div>
 <?php endif; ?>
+
 <?php require RUTA_RAIZ . '/app/views/layouts/footer.php'; ?>

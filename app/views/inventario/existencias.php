@@ -4,9 +4,11 @@ $migas = ['Inventario', 'Existencias'];
 $rutaActiva = 'inventario/existencias';
 require RUTA_RAIZ . '/app/views/layouts/header.php';
 ?>
+
 <h1 class="titulo-1">Existencias</h1>
 <section class="tarjeta">
-    <form class="formulario formulario--busqueda" method="get" action="<?= Seguridad::url('inventario/existencias') ?>">
+    <form class="formulario formulario--busqueda" method="get"
+          action="<?= Seguridad::url('inventario/existencias') ?>">
         <input type="hidden" name="ruta" value="inventario/existencias">
         <div class="campo">
             <label class="campo__etiqueta" for="q">Buscar por nombre o código</label>
@@ -16,6 +18,7 @@ require RUTA_RAIZ . '/app/views/layouts/header.php';
         <button class="btn btn--primario" type="submit">Buscar</button>
     </form>
 </section>
+
 <?php if ($productos === []): ?>
     <p class="texto-suave">No se encontraron productos.</p>
 <?php else: ?>
@@ -34,7 +37,9 @@ require RUTA_RAIZ . '/app/views/layouts/header.php';
                 </p>
                 <p class="dato">
                     <span class="dato__etiqueta">Mínimo / Máximo</span>
-                    <span class="cifras"><?= (int) $producto['stockMinimo'] ?> / <?= (int) $producto['stockMaximo'] ?></span>
+                    <span class="cifras">
+                        <?= (int) $producto['stockMinimo'] ?> / <?= (int) $producto['stockMaximo'] ?>
+                    </span>
                 </p>
                 <p class="dato">
                     <span class="dato__etiqueta">Ubicación</span>
@@ -54,4 +59,5 @@ require RUTA_RAIZ . '/app/views/layouts/header.php';
         <?php endforeach; ?>
     </div>
 <?php endif; ?>
+
 <?php require RUTA_RAIZ . '/app/views/layouts/footer.php'; ?>

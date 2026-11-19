@@ -5,14 +5,14 @@
 class Pago
 {
     /**
-     * Registra un único pago para una venta abierta.
+     * Registra el pago, actualiza inventario y crea factura de forma atómica.
      *
-     * @return array{idPago: int, metodoPago: string, total: float, recibido: float, cambio: float}
+     * @return array{idPago: int, idFactura: int, metodoPago: string, total: float, recibido: float, cambio: float}
      */
     public static function registrar(int $idVenta, int $idUsuario, string $metodo, mixed $recibido = null): array
     {
-        if ($idVenta <= 0) {
-            throw new InvalidArgumentException('El identificador de venta no es válido.');
+        if ($idVenta <= 0 || $idUsuario <= 0) {
+            throw new InvalidArgumentException('La venta o el usuario no son válidos.');
         }
 
         $metodos = [
@@ -20,6 +20,7 @@ class Pago
             'Tarjeta' => 'Tarjeta',
             'Digital' => 'Digital',
             'Pago digital' => 'Digital',
+            'Contraentrega' => 'Contraentrega',
         ];
         if (!isset($metodos[$metodo])) {
             throw new InvalidArgumentException('El método de pago no está permitido.');
@@ -31,14 +32,19 @@ class Pago
         }
 
         $pdo = Database::getConexion();
-        $iniciarTransaccion = !$pdo->inTransaction();
-        if ($iniciarTransaccion) {
-            $pdo->beginTransaction();
+        if ($pdo->inTransaction()) {
+            throw new LogicException('El registro de pago debe controlar su propia transacción.');
         }
 
+        $pdo->beginTransaction();
+        $bloqueoConsecutivo = false;
+
         try {
+            Factura::adquirirBloqueoConsecutivo($pdo);
+            $bloqueoConsecutivo = true;
+
             $consultaVenta = $pdo->prepare(
-                'SELECT total, estado
+                'SELECT idUsuario, total, estado
                  FROM Venta
                  WHERE idVenta = :idVenta
                  FOR UPDATE'
@@ -60,7 +66,6 @@ class Pago
             if ($consultaPago->fetchColumn() !== false) {
                 throw new DomainException('La venta ya tiene un pago registrado.');
             }
-
             if ($venta['estado'] !== 'Abierta') {
                 throw new DomainException('Solo se puede cobrar una venta abierta.');
             }
@@ -68,7 +73,6 @@ class Pago
             $totalCentavos = self::aCentavos($venta['total'], 'El total de la venta');
             $recibidoCentavos = $totalCentavos;
             $cambioCentavos = 0;
-
             if ($metodoBaseDatos === 'Efectivo') {
                 if ($recibido === null) {
                     throw new InvalidArgumentException('Debes indicar el valor recibido en efectivo.');
@@ -81,6 +85,9 @@ class Pago
                 $cambioCentavos = $recibidoCentavos - $totalCentavos;
             }
 
+            Venta::marcarPagadaEnTransaccion($pdo, $idVenta);
+            Inventario::descontarParaVenta($pdo, $idVenta, (int) $venta['idUsuario']);
+
             $insertar = $pdo->prepare(
                 'INSERT INTO Pago (idVenta, fechaPago, monto, metodoPago, estadoPago)
                  VALUES (:idVenta, CURRENT_TIMESTAMP, :monto, :metodoPago, :estadoPago)'
@@ -91,95 +98,34 @@ class Pago
                 ':metodoPago' => $metodoBaseDatos,
                 ':estadoPago' => 'Confirmado',
             ]);
-
             $idPago = (int) $pdo->lastInsertId();
 
-            $detallesConsulta = $pdo->prepare(
-                'SELECT dv.idProducto, dv.cantidad, p.idInventario
-                 FROM DetalleVenta dv
-                 INNER JOIN Producto p ON p.idProducto = dv.idProducto
-                 WHERE dv.idVenta = :idVenta
-                 FOR UPDATE'
-            );
-            $detallesConsulta->execute([':idVenta' => $idVenta]);
-            $detalles = $detallesConsulta->fetchAll();
-            if ($detalles === []) {
-                throw new DomainException('No se puede cobrar una venta sin productos.');
-            }
-
-            foreach ($detalles as $detalle) {
-                $inventarioConsulta = $pdo->prepare(
-                    'SELECT cantidadActual
-                     FROM Inventario
-                     WHERE idInventario = :idInventario
-                     FOR UPDATE'
-                );
-                $inventarioConsulta->execute([':idInventario' => (int) $detalle['idInventario']]);
-                $inventario = $inventarioConsulta->fetch();
-                if (!$inventario) {
-                    throw new OutOfBoundsException('El inventario de un producto ya no existe.');
-                }
-
-                $cantidadActual = (int) $inventario['cantidadActual'];
-                $cantidadVendida = (int) $detalle['cantidad'];
-                if ($cantidadVendida > $cantidadActual) {
-                    throw new DomainException('La existencias de un producto son insuficientes para completar la venta.');
-                }
-
-                $nuevaCantidad = $cantidadActual - $cantidadVendida;
-                $actualizarInventario = $pdo->prepare(
-                    'UPDATE Inventario
-                     SET cantidadActual = :cantidadActual,
-                         fechaActualizacion = CURRENT_TIMESTAMP
-                     WHERE idInventario = :idInventario'
-                );
-                $actualizarInventario->execute([
-                    ':cantidadActual' => $nuevaCantidad,
-                    ':idInventario' => (int) $detalle['idInventario'],
-                ]);
-
-                $movimiento = $pdo->prepare(
-                    'INSERT INTO MovimientoInventario
-                        (idInventario, idUsuario, fecha, tipo, cantidad, motivo)
-                     VALUES
-                        (:idInventario, :idUsuario, CURRENT_TIMESTAMP, :tipo, :cantidad, :motivo)'
-                );
-                $movimiento->execute([
-                    ':idInventario' => (int) $detalle['idInventario'],
-                    ':idUsuario' => $idUsuario,
-                    ':tipo' => 'Salida',
-                    ':cantidad' => $cantidadVendida,
-                    ':motivo' => 'Venta #' . $idVenta,
-                ]);
-            }
-
-            $actualizarVenta = $pdo->prepare(
-                'UPDATE Venta SET estado = :estado WHERE idVenta = :idVenta'
-            );
-            $actualizarVenta->execute([
-                ':estado' => 'Pagada',
-                ':idVenta' => $idVenta,
-            ]);
-
             $idFactura = Factura::crearEnTransaccion($pdo, $idVenta, $totalCentavos / 100);
-
-            if ($iniciarTransaccion) {
-                $pdo->commit();
-            }
+            $pdo->commit();
 
             return [
                 'idPago' => $idPago,
                 'idFactura' => $idFactura,
-                'metodoPago' => $metodo,
+                'metodoPago' => $metodoBaseDatos,
                 'total' => $totalCentavos / 100,
                 'recibido' => $recibidoCentavos / 100,
                 'cambio' => $cambioCentavos / 100,
             ];
         } catch (Throwable $error) {
-            if ($iniciarTransaccion && $pdo->inTransaction()) {
+            if ($pdo->inTransaction()) {
                 $pdo->rollBack();
             }
             throw $error;
+        } finally {
+            if ($bloqueoConsecutivo) {
+                try {
+                    if (!Factura::liberarBloqueoConsecutivo($pdo)) {
+                        error_log('No se pudo liberar el bloqueo del consecutivo de factura.');
+                    }
+                } catch (PDOException $error) {
+                    error_log('Error al liberar el bloqueo del consecutivo de factura: ' . $error->getMessage());
+                }
+            }
         }
     }
 

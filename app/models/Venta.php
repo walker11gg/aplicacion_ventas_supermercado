@@ -4,17 +4,16 @@
  */
 class Venta
 {
-    /**
-     * Crea una venta abierta con la fecha y hora actuales de la base de datos.
-     */
+    /** Crea una venta abierta con la fecha y hora actuales de la base de datos. */
     public static function crear(int $idCajero, string $estado = 'Abierta'): int
     {
         if ($idCajero <= 0) {
             throw new InvalidArgumentException('El cajero no es válido.');
         }
-
-
         self::validarEstado($estado);
+        if ($estado === 'Pagada') {
+            throw new DomainException('Una venta solo puede quedar pagada al registrar su pago.');
+        }
 
         $consulta = Database::getConexion()->prepare(
             'INSERT INTO Venta (idUsuario, fecha, impuesto, total, estado)
@@ -47,11 +46,7 @@ class Venta
         return $venta ?: null;
     }
 
-    /**
-     * Recalcula el total bruto y el impuesto incluido a partir de las líneas.
-     *
-     * @return array{subtotalSinIva: float, impuesto: float, total: float}
-     */
+    /** Recalcula subtotal, impuesto y total a partir de las líneas de detalle. */
     public static function recalcularTotales(int $idVenta): array
     {
         if ($idVenta <= 0) {
@@ -96,20 +91,26 @@ class Venta
         ];
     }
 
-    /** Actualiza el estado usando los valores permitidos por el esquema. */
+    /**
+     * Cambia estados no pagados. El pago es el único flujo que puede marcar
+     * una venta como Pagada, porque también confirma inventario y factura.
+     */
     public static function actualizarEstado(int $idVenta, string $estado): void
     {
         if ($idVenta <= 0) {
             throw new InvalidArgumentException('El identificador de venta no es válido.');
         }
         self::validarEstado($estado);
-
-        if (self::obtenerPorId($idVenta) === null) {
-            throw new OutOfBoundsException('La venta indicada no existe.');
+        if ($estado === 'Pagada') {
+            throw new DomainException('Una venta solo puede quedar pagada al registrar su pago.');
         }
 
-        if ($estado === 'Pagada') {
-            // PUNTO DE INTEGRACIÓN: descuento de inventario (Brandon)
+        $venta = self::obtenerPorId($idVenta);
+        if ($venta === null) {
+            throw new OutOfBoundsException('La venta indicada no existe.');
+        }
+        if ($venta['estado'] === 'Pagada') {
+            throw new DomainException('No se puede cambiar el estado de una venta ya pagada.');
         }
 
         Database::getConexion()
@@ -118,6 +119,25 @@ class Venta
                 ':estado' => $estado,
                 ':idVenta' => $idVenta,
             ]);
+    }
+
+    /** Marca como pagada una venta bloqueada dentro de la transacción de pago. */
+    public static function marcarPagadaEnTransaccion(PDO $pdo, int $idVenta): void
+    {
+        $consulta = $pdo->prepare(
+            'UPDATE Venta
+             SET estado = :pagada
+             WHERE idVenta = :idVenta AND estado = :abierta'
+        );
+        $consulta->execute([
+            ':pagada' => 'Pagada',
+            ':idVenta' => $idVenta,
+            ':abierta' => 'Abierta',
+        ]);
+
+        if ($consulta->rowCount() !== 1) {
+            throw new DomainException('La venta ya no está abierta y no puede confirmarse.');
+        }
     }
 
     private static function validarEstado(string $estado): void

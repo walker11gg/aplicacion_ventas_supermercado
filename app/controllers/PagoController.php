@@ -18,7 +18,9 @@ class PagoController
         $idRecibido = $metodoHttp === 'POST'
             ? ($_POST['idVenta'] ?? $_GET['idVenta'] ?? null)
             : ($_GET['idVenta'] ?? null);
-        $idVenta = filter_var($idRecibido, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
+        $idVenta = is_scalar($idRecibido)
+            ? filter_var($idRecibido, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]])
+            : false;
 
         $error = null;
         $codigoError = 200;
@@ -75,7 +77,12 @@ class PagoController
                         if ($usuario === null) {
                             throw new DomainException('Tu sesión expiró. Inicia sesión nuevamente.');
                         }
-                        $resultado = Pago::registrar($idVenta, (int) $usuario['id'], $metodo, $recibido);
+                        $resultado = Pago::registrar(
+                            $idVenta,
+                            (int) $usuario['id'],
+                            $metodo,
+                            $recibido
+                        );
                         $_SESSION[$claveResultado] = $resultado;
                         Auth::redirigir('pago/cobrar&idVenta=' . $idVenta);
                     } catch (InvalidArgumentException $e) {

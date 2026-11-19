@@ -6,9 +6,6 @@ class DetalleVenta
 {
     /**
      * Agrega una línea y mantiene actualizados el total y el impuesto de venta.
-     *
-     * El precio unitario es el precio de venta y el subtotal corresponde
-     * a precio unitario por cantidad. El IVA se calcula al procesar la venta.
      */
     public static function agregarLinea(
         int $idVenta,
@@ -19,7 +16,6 @@ class DetalleVenta
         if ($idVenta <= 0 || $idProducto <= 0) {
             throw new InvalidArgumentException('La venta o el producto no son válidos.');
         }
-
 
         if (is_bool($cantidad) || is_float($cantidad) || (!is_int($cantidad) && !is_string($cantidad))) {
             throw new InvalidArgumentException('La cantidad debe ser un entero mayor que cero.');

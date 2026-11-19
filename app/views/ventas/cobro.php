@@ -57,13 +57,20 @@ require RUTA_RAIZ . '/app/views/layouts/header.php';
                 <?= Seguridad::e($venta['estado']) ?>
             </span>
         </div>
-        <p class="texto-pequeno texto-suave">Fecha: <?= Seguridad::e(date('d/m/Y H:i', strtotime((string) $venta['fecha']))) ?></p>
+        <p class="texto-pequeno texto-suave">
+            Fecha: <?= Seguridad::e(date('d/m/Y H:i', strtotime((string) $venta['fecha']))) ?>
+        </p>
 
         <?php if ($detalles !== []): ?>
             <div class="tabla-contenedor">
                 <table class="tabla">
                     <thead>
-                        <tr><th>Producto</th><th class="num">Cant.</th><th class="num">Precio</th><th class="num">Subtotal</th></tr>
+                        <tr>
+                            <th>Producto</th>
+                            <th class="num">Cant.</th>
+                            <th class="num">Precio</th>
+                            <th class="num">Subtotal</th>
+                        </tr>
                     </thead>
                     <tbody>
                     <?php foreach ($detalles as $detalle): ?>
@@ -106,7 +113,8 @@ require RUTA_RAIZ . '/app/views/layouts/header.php';
                         <option value="">Selecciona un método</option>
                         <option value="Efectivo">Efectivo</option>
                         <option value="Tarjeta">Tarjeta</option>
-                        <option value="Pago digital">Pago digital</option>
+                        <option value="Digital">Digital</option>
+                        <option value="Contraentrega">Contraentrega</option>
                     </select>
                 </div>
                 <div class="campo" id="campoRecibido">
@@ -123,5 +131,5 @@ require RUTA_RAIZ . '/app/views/layouts/header.php';
     </section>
 <?php endif; ?>
 
-    <script src="<?= Seguridad::recurso('js/venta.js') ?>"></script>
+<script src="<?= Seguridad::recurso('js/venta.js') ?>"></script>
 <?php require RUTA_RAIZ . '/app/views/layouts/footer.php'; ?>

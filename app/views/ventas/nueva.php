@@ -129,5 +129,5 @@ require RUTA_RAIZ . '/app/views/layouts/header.php';
     <?php endif; ?>
 </section>
 
-    <script src="<?= Seguridad::recurso('js/busqueda.js') ?>"></script>
+<script src="<?= Seguridad::recurso('js/busqueda.js') ?>"></script>
 <?php require RUTA_RAIZ . '/app/views/layouts/footer.php'; ?>
